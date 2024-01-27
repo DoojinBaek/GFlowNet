@@ -10,7 +10,7 @@ from itertools import count
 from collections import defaultdict
 from torch.distributions.categorical import Categorical
 
-device = 'cuda:5'
+device = 'cuda:0'
 
 floattensor = lambda x: torch.FloatTensor(np.array(x)).to(device)
 longtensor = lambda x: torch.LongTensor(np.array(x)).to(device)
@@ -24,7 +24,9 @@ class Reward_Function:
 
     def compute(self, state):
         # e.g. state = [2,3]
-        abs_val = abs(state/self.H - ((self.H-1)/self.H)/2)
+        abs_val = abs(state/self.H - ((self.H-1)/self.H)/2) 
+        # slight modification to make sure each coordiante in range (-0.5, 0.5)
+        # this is actually the true alignment
         return self.r0 + self.r1*(abs_val > 0.25).prod(-1) + self.r2*((0.3 < abs_val) * (abs_val < 0.4)).prod(-1)
 
 class GridEnv:
@@ -286,9 +288,10 @@ beta1 = 0.9
 beta2 = 0.999
 
 # Training Hyperparameters
-train_steps = 10000
+train_steps = 20000
 batch_size = 16
 replay_sample_size = 2
+experiment_id = 0
 
 reward_fn = Reward_Function(H).compute
 env = GridEnv(H, ndim, reward_fn, id=1127)
@@ -302,7 +305,6 @@ losses = []
 state_visit_log = []
 empirical_losses = []
 
-sampling_num = 1
 calculate_empirical_loss_period = 10
 num_sample_for_empirical_loss = 200000
 log_period = 10
@@ -326,6 +328,7 @@ for i in range(train_steps):
 
     # print out results during training
     if i % log_period == 0:
+        print('Training ' + str(int(round(i/train_steps, 2)*100)) + '%' + ' (' + str(i) + '/' + str(train_steps) + ')')
         if len(losses) != 0:
             loss_mean = np.array(list(map(lambda x:x[0], losses))[-100:]).mean()
             leaf_loss_mean = np.array(list(map(lambda x:x[1], losses))[-100:]).mean()
@@ -335,7 +338,7 @@ for i in range(train_steps):
             l1_loss, kl_div_loss = empirical_losses[-1]
             print('Empirical L1 Loss:', l1_loss, 'KL Divergence:', kl_div_loss, end='\n\n')
 
-with open('./experiment_log.pickle', 'wb') as file:
+with open('./results/experiment_'+str(experiment_id)+'.pickle', 'wb') as file:
     pickle.dump(
         {
             'losses': np.float32(losses),
